@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autotrade"
+version = "0.1.0"
+description = "日本株・米国株 自動売買システム（マルチマーケット対応）— Phase 1: バックテスト基盤"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# 実データ取得（ネットワーク必要）。未インストールでも合成データで動作する。
+data = ["yfinance>=0.2"]
+# 開発・テスト用
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+autotrade = "autotrade.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,53 @@
+# 日本株（JPX）バックテスト設定
+# 既定はネット不要の合成データ（synthetic）で「すぐ動く」。
+# 実データを使う場合は data.source を yfinance にして、universe を "7203.T" 形式にする。
+
+market: JPX
+
+data:
+  source: synthetic          # synthetic | yfinance | csv
+  synthetic:
+    seed: 42
+  # yfinance を使う場合の例:
+  # source: yfinance
+  # universe を "7203.T", "6758.T" のように .T 付きにする
+
+# 合成データ用のダミー銘柄。yfinance 利用時は実コードに置き換える。
+universe:
+  - STOCK_A
+  - STOCK_B
+  - STOCK_C
+  - STOCK_D
+  - STOCK_E
+
+period:
+  start: "2021-01-01"
+  end: "2023-12-31"
+
+# Phase 1/2 は資金額に依存しないが、Phase 3（少額・単元未満株）を見据えて1万円を既定に。
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: sma_crossover
+
+# リスク管理（必須要件）
+risk:
+  stop_loss_pct: 0.08          # 損切り -8%
+  take_profit_pct: 0.20        # 利確 +20%
+  per_symbol_max_weight: 0.20  # 1銘柄あたり最大20%
+  max_gross_exposure: 1.0      # 全体で最大100%
+  max_drawdown_pct: 0.20       # -20% で新規停止（サーキットブレーカー）
+
+# 取引コスト（保守的に。コストゼロのバックテストは禁止）
+# 日本の単元未満株はスプレッドが実質コストになりやすいので広めに見積もる。
+cost:
+  commission_rate: 0.005       # 0.5%（単元未満株の実質スプレッド込みの保守的想定）
+  min_commission: 0            # 最低手数料（円）。利用サービスに合わせて調整
+  slippage_bps: 10             # 0.10% のスリッページ
+  fx_fee_rate: 0.0             # 日本株は為替なし

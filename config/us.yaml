@@ -1,0 +1,54 @@
+# 米国株（US）バックテスト設定
+# 既定はネット不要の合成データ（synthetic）。
+# 実データは data.source を yfinance にし、universe を "AAPL" 等の実ティッカーにする。
+# 米国株は為替（円⇄ドル）を扱うため fx_fee_rate を取引コストに含める。
+
+market: US
+
+data:
+  source: synthetic          # synthetic | yfinance | csv
+  synthetic:
+    seed: 7
+  # 実データ例:
+  # source: yfinance
+  # universe: [AAPL, MSFT, KO, ...]
+
+universe:
+  - STOCK_A
+  - STOCK_B
+  - STOCK_C
+  - STOCK_D
+  - STOCK_E
+
+period:
+  start: "2021-01-01"
+  end: "2023-12-31"
+
+initial_cash: 10000            # 円。米国株は端株/金額指定で少額購入を想定
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: sma_crossover
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+  per_symbol_max_weight: 0.20
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.20
+
+# 取引コスト（米国株）。手数料に加え、為替手数料を必ず含める。
+cost:
+  commission_rate: 0.003       # 0.3%（参考値。証券会社により異なる）
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0025          # 片道0.25%程度の為替手数料を想定（往復で効く）
+
+# 円換算評価のための固定為替（Phase 1）。将来ヒストリカル為替に差し替え。
+fx:
+  usd_jpy: 150

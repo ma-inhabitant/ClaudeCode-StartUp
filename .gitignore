@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# 環境変数・秘密情報（API キー・口座情報は絶対にコミットしない）
+.env
+.env.*
+!.env.example
+
+# データキャッシュ・出力
+data/cache/
+output/
+*.parquet
+
+# テスト・ツール
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / エディタ
+.DS_Store
+.idea/
+.vscode/

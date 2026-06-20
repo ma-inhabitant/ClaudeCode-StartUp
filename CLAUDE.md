@@ -24,7 +24,7 @@
 
 | フェーズ | 内容 | 実弾リスク | 状態 |
 |---|---|---|---|
-| **Phase 1** | バックテスト基盤（データ取得・特徴量・戦略・約定シミュレーション・評価） | なし | **最優先・着手中** |
+| **Phase 1** | バックテスト基盤（データ取得・特徴量・戦略・約定シミュレーション・評価） | なし | **基盤実装済み（合成データで動作）／磨き込み中** |
 | Phase 2 | ペーパートレード（リアルタイムデータで仮想発注、挙動検証） | なし | 未着手 |
 | Phase 3 | 本番運用（**約1万円から**・市場別の運用方式・リスク管理を厳重に） | あり | 未着手 |
 
@@ -250,14 +250,26 @@
 
 ---
 
-## 6. 開発コマンド（実装が進んだら追記）
+## 6. 開発コマンド
 
-> セットアップ・テスト・バックテスト実行コマンドは、コードを追加した時点でここに記載する。
-> 例:
-> - 環境構築: `uv sync` もしくは `pip install -e .`
-> - テスト: `pytest`
-> - バックテスト実行（日本株）: `python -m autotrade.cli backtest --config config/jp.yaml`
-> - バックテスト実行（米国株）: `python -m autotrade.cli backtest --config config/us.yaml`
+- 環境構築（本体）: `pip install -e .`
+- 環境構築（テスト/実データ）: `pip install -e ".[dev]"` / `pip install -e ".[data]"`
+- テスト: `pytest`
+- バックテスト（日本株・既定は合成データでネット不要）:
+  `python -m autotrade.cli backtest --config config/jp.yaml`
+- バックテスト（米国株・為替手数料込み）:
+  `python -m autotrade.cli backtest --config config/us.yaml`
+- 資産曲線を保存: `... --save-equity output/equity.csv`
+
+> 実データは設定の `data.source` を `yfinance` にし、`universe` を実ティッカー
+> （日本株 `7203.T` / 米国株 `AAPL` 等）へ。J-Quants・IBKR は DataSource/Broker 抽象で後付け。
+
+### Phase 1 の実装状況（2026-06 時点）
+
+データ（合成/CSV/yfinance）・特徴量（SMA/RSI/ATR）・戦略（移動平均クロス）・
+リスク（損切り/利確・サイジング・最大DDブレーカー）・約定（コストモデル付き
+BacktestBroker）・評価（Metrics）・CLI・テスト（17件）まで実装済みで、
+合成データでエンドツーエンドに動作する。次は実データ接続と戦略の磨き込み。
 
 ---
 
