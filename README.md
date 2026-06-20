@@ -48,6 +48,33 @@ python -m autotrade.cli backtest --config config/us_real.yaml   # 実在の米�
 > `fc.yahoo.com`）を環境設定の許可リストに追加してからセッションを開始し直してください。
 > 参考: https://code.claude.com/docs/en/claude-code-on-the-web
 
+### Yahoo Finance が許可リスト外でも実データで動かす
+
+egress 許可リストに `raw.githubusercontent.com` だけ通っていれば、実在の **S&P500 構成銘柄の
+日足（2013-02-08〜2018-02-07、実データ）** を GitHub ホストのバンドルから取得して
+バックテストできます（初回のみダウンロードし、`data/cache/` にキャッシュ）。
+
+```bash
+python -m autotrade.cli backtest --config config/us_real_sp500.yaml \
+    --save-equity output/us_real_equity.csv
+```
+
+実行例（実データでの結果。良好な数値ではない点に注意 ＝ 戦略はまだベースライン）:
+
+```
+==== バックテスト結果 ====
+初期資産        : 10,000 USD
+最終資産        : 8,512 USD
+トータルリターン: -14.88%
+シャープレシオ  : -0.56
+最大DD          : -22.95%
+取引回数        : 37
+勝率            : 32.43%
+```
+
+> データ元: [plotly/datasets `all_stocks_5yr.csv`](https://github.com/plotly/datasets)。
+> 本格運用では日本=J-Quants、米国=IBKR/専用 API に差し替える前提です。
+
 ## テスト
 
 ```bash
