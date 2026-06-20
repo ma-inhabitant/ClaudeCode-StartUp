@@ -1,0 +1,56 @@
+# 日本株（JPX）バックテスト設定 — 実データ版（yfinance）
+#
+# 【使う前に】この環境はネットワーク許可リスト制のため、事前に以下のホストを
+#   環境のネットワーク egress 設定に追加する必要があります:
+#     - query1.finance.yahoo.com
+#     - query2.finance.yahoo.com
+#     - fc.yahoo.com
+#   追加後にセッションを開始し直してから実行してください。
+#
+# 実行: python -m autotrade.cli backtest --config config/jp_real.yaml
+
+market: JPX
+
+data:
+  source: yfinance
+  yfinance:
+    auto_adjust: true
+
+# 実在の東証プライム主要銘柄（.T サフィックス付き）。
+universe:
+  - "7203.T"   # トヨタ自動車
+  - "6758.T"   # ソニーグループ
+  - "9984.T"   # ソフトバンクグループ
+  - "8306.T"   # 三菱UFJフィナンシャル・グループ
+  - "7974.T"   # 任天堂
+  - "6861.T"   # キーエンス
+  - "9433.T"   # KDDI
+  - "4063.T"   # 信越化学工業
+
+period:
+  start: "2021-01-01"
+  end: "2023-12-31"
+
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: sma_crossover
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+  per_symbol_max_weight: 0.20
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.20
+
+cost:
+  commission_rate: 0.005
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0

@@ -1,0 +1,58 @@
+# 米国株（US）バックテスト設定 — 実データ版（yfinance）
+#
+# 【使う前に】環境のネットワーク egress 設定に以下を追加してから実行:
+#     - query1.finance.yahoo.com
+#     - query2.finance.yahoo.com
+#     - fc.yahoo.com
+#
+# 実行: python -m autotrade.cli backtest --config config/us_real.yaml
+
+market: US
+
+data:
+  source: yfinance
+  yfinance:
+    auto_adjust: true
+
+# 実在の米国主要銘柄（手頃な価格帯を中心に）。
+universe:
+  - AAPL    # Apple
+  - MSFT    # Microsoft
+  - KO      # Coca-Cola
+  - PEP     # PepsiCo
+  - JNJ     # Johnson & Johnson
+  - V       # Visa
+  - PG      # Procter & Gamble
+  - WMT     # Walmart
+
+period:
+  start: "2021-01-01"
+  end: "2023-12-31"
+
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: sma_crossover
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+  per_symbol_max_weight: 0.20
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.20
+
+# 米国株は為替手数料を必ず含める。
+cost:
+  commission_rate: 0.003
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0025
+
+fx:
+  usd_jpy: 150

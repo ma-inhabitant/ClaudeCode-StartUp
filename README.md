@@ -36,8 +36,17 @@ python -m autotrade.cli backtest --config config/us.yaml
 python -m autotrade.cli backtest --config config/jp.yaml --save-equity output/equity.csv
 ```
 
-実データ（yfinance）を使うときは、設定ファイルの `data.source` を `yfinance` にし、
-`universe` を実ティッカー（日本株は `7203.T`、米国株は `AAPL` など）に置き換えます。
+実データ（yfinance）を使うときは、実データ用の設定で実行します:
+
+```bash
+python -m autotrade.cli backtest --config config/jp_real.yaml   # 実在の東証プライム銘柄
+python -m autotrade.cli backtest --config config/us_real.yaml   # 実在の米国主要銘柄
+```
+
+> **Claude Code on the web 環境での注意:** ネットワーク egress が許可リスト制の場合、
+> yfinance の接続先（`query1.finance.yahoo.com` / `query2.finance.yahoo.com` /
+> `fc.yahoo.com`）を環境設定の許可リストに追加してからセッションを開始し直してください。
+> 参考: https://code.claude.com/docs/en/claude-code-on-the-web
 
 ## テスト
 
