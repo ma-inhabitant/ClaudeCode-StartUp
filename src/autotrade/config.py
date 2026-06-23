@@ -51,13 +51,15 @@ def _build_data_source(data_cfg: Dict[str, Any]) -> DataSource:
     raise ValueError(f"未知のデータソース: {source}")
 
 
-def build_engine(cfg: Dict[str, Any]) -> BacktestEngine:
+def build_engine(cfg: Dict[str, Any], prices=None) -> BacktestEngine:
     calendar = get_calendar(cfg.get("market", "JPX"))
 
-    source = _build_data_source(cfg.get("data", {}))
-    universe = cfg["universe"]
-    period = cfg.get("period", {})
-    prices = source.get_prices(universe, period.get("start"), period.get("end"))
+    # prices を渡せば取得をスキップして使い回す（ウォークフォワード等で多数回実行する用）。
+    if prices is None:
+        source = _build_data_source(cfg.get("data", {}))
+        universe = cfg["universe"]
+        period = cfg.get("period", {})
+        prices = source.get_prices(universe, period.get("start"), period.get("end"))
 
     feat_cfg = cfg.get("features", {}) or {}
     feature_builder = FeatureBuilder(**feat_cfg)
