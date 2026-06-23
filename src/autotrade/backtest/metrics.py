@@ -65,6 +65,36 @@ def compute_metrics(equity: pd.Series, trades: List, currency: str = "JPY") -> D
     return out
 
 
+def format_comparison(strategy: Dict[str, float], benchmark: Dict[str, float]) -> str:
+    """戦略 vs バイ&ホールドの対比表（CLI 表示用）。
+
+    「ただ買って持ち続けた場合」に戦略が勝てているかを一目で分かるようにする。
+    """
+    pct = lambda x: f"{x * 100:>+7.2f}%" if isinstance(x, (int, float)) and pd.notna(x) else "    n/a"
+    num = lambda x: f"{x:>8.2f}" if isinstance(x, (int, float)) and pd.notna(x) else "    n/a"
+
+    def row(label, key, fmt):
+        return f"  {label:18} {fmt(strategy.get(key)):>10} | {fmt(benchmark.get(key)):>10}"
+
+    total_diff = (strategy.get("total_return", 0) or 0) - (benchmark.get("total_return", 0) or 0)
+    verdict = (
+        "戦略の勝ち（持ち続けるより良い）" if total_diff > 0
+        else "戦略の負け（ただ持ち続けた方が良い）"
+    )
+    lines = [
+        "==== 戦略 vs バイ&ホールド（持ち続けた場合） ====",
+        f"  {'指標':16} {'戦略':>12} | {'持ち続け':>10}",
+        "  " + "-" * 40,
+        row("トータルリターン", "total_return", pct),
+        row("CAGR(年率)", "cagr", pct),
+        row("シャープレシオ", "sharpe", num),
+        row("最大DD", "max_drawdown", pct),
+        "  " + "-" * 40,
+        f"  差(リターン)      : {total_diff * 100:>+7.2f}%  → {verdict}",
+    ]
+    return "\n".join(lines)
+
+
 def format_metrics(metrics: Dict[str, float]) -> str:
     """人間向けに整形（CLI 表示用）。"""
     cur = metrics.get("currency", "")

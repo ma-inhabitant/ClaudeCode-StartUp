@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
+from autotrade.backtest.benchmark import buy_and_hold_equity
 from autotrade.backtest.metrics import compute_metrics
 from autotrade.data.base import PriceData
 from autotrade.execution.backtest_broker import BacktestBroker, Trade
@@ -37,6 +38,8 @@ class BacktestResult:
     trades: List[Trade]
     fills: list
     metrics: Dict[str, float] = field(default_factory=dict)
+    benchmark_curve: Optional[pd.Series] = None       # バイ&ホールドの資産曲線
+    benchmark_metrics: Dict[str, float] = field(default_factory=dict)
 
 
 class BacktestEngine:
@@ -55,6 +58,8 @@ class BacktestEngine:
         self.strategy = strategy
         self.risk = risk_manager
         self.calendar = calendar
+        self.cost_model = cost_model
+        self.initial_cash = initial_cash
         self.portfolio = Portfolio(cash=initial_cash, currency=calendar.currency)
         self.broker = BacktestBroker(self.portfolio, cost_model, lot_size=calendar.lot_size)
 
@@ -104,9 +109,16 @@ class BacktestEngine:
             {d: v for d, v in equity_records}, name="equity"
         ).sort_index()
         metrics = compute_metrics(equity_curve, self.broker.trades, self.calendar.currency)
+
+        # バイ&ホールド・ベンチマーク（売買せず持ち続けた場合）を同条件で算出。
+        bench_curve = buy_and_hold_equity(self.prices, self.cost_model, self.initial_cash)
+        bench_metrics = compute_metrics(bench_curve, [], self.calendar.currency)
+
         return BacktestResult(
             equity_curve=equity_curve,
             trades=self.broker.trades,
             fills=self.broker.fills,
             metrics=metrics,
+            benchmark_curve=bench_curve,
+            benchmark_metrics=bench_metrics,
         )

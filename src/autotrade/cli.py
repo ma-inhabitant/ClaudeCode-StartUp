@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from autotrade.backtest.metrics import format_metrics
+from autotrade.backtest.metrics import format_comparison, format_metrics
 from autotrade.config import build_engine, load_config
 
 
@@ -24,6 +24,10 @@ def cmd_backtest(args: argparse.Namespace) -> int:
 
     print(format_metrics(result.metrics))
     print(f"\n約定回数: {len(result.fills)} / クローズ取引: {len(result.trades)}")
+
+    if result.benchmark_metrics:
+        print()
+        print(format_comparison(result.metrics, result.benchmark_metrics))
 
     if args.save_equity:
         out = Path(args.save_equity)
