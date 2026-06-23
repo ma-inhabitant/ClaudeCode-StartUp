@@ -11,6 +11,8 @@ yfinance（Yahoo Finance）への egress が許可リストで塞がれている
 
 from __future__ import annotations
 
+import http.client
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import List, Optional
@@ -33,21 +35,75 @@ class SP500GithubSource(DataSource):
         cache_dir: str = "data/cache",
         url: str = DEFAULT_URL,
         timeout: int = 60,
+        max_retries: int = 12,
     ):
         self.cache_dir = Path(cache_dir)
         self.url = url
         self.timeout = timeout
+        self.max_retries = max_retries
 
     def _bundle_path(self) -> Path:
         return self.cache_dir / "all_stocks_5yr.csv"
+
+    def _download_resumable(self, dest: Path) -> None:
+        """Range リクエストで分割ダウンロードし、途中で切れても再開する。
+
+        約29MB のファイルをプロキシ経由で一括取得すると ``IncompleteRead`` で
+        切れることがあるため、64KB ずつストリーム書き込みし、切断時は現在の
+        バイト位置から ``Range`` で続きを取得する。GitHub raw は 206 に対応。
+        """
+        tmp = dest.with_name(dest.name + ".part")
+        total: Optional[int] = None
+        last_err: Optional[Exception] = None
+
+        for _ in range(self.max_retries):
+            have = tmp.stat().st_size if tmp.exists() else 0
+            req = urllib.request.Request(self.url)
+            if have:
+                req.add_header("Range", f"bytes={have}-")
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    # サーバが Range 非対応で全体(200)を返したら最初から書き直す。
+                    if have and getattr(resp, "status", 200) == 200:
+                        have = 0
+                    if total is None:
+                        cr = resp.headers.get("Content-Range")
+                        if cr and "/" in cr:
+                            total = int(cr.rsplit("/", 1)[-1])
+                        else:
+                            cl = resp.headers.get("Content-Length")
+                            total = (int(cl) + have) if cl is not None else None
+                    mode = "ab" if have else "wb"
+                    with open(tmp, mode) as f:
+                        while True:
+                            chunk = resp.read(1 << 16)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+            except (http.client.IncompleteRead, urllib.error.URLError, ConnectionError, TimeoutError) as exc:
+                # 途中まで書けた分は tmp に残るので、次ループで続きから再取得する。
+                last_err = exc
+                # IncompleteRead は読めた partial を保持しているので書き足す。
+                partial = getattr(exc, "partial", None)
+                if partial:
+                    with open(tmp, "ab") as f:
+                        f.write(partial)
+                continue
+
+            if total is None or tmp.stat().st_size >= total:
+                tmp.replace(dest)
+                return
+
+        raise RuntimeError(
+            f"バンドルのダウンロードが完了しませんでした（{tmp.stat().st_size if tmp.exists() else 0}"
+            f"/{total} bytes）。最後のエラー: {last_err}"
+        )
 
     def _load_bundle(self) -> pd.DataFrame:
         path = self._bundle_path()
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            # urllib（標準ライブラリ）でダウンロード。追加依存なし。
-            with urllib.request.urlopen(self.url, timeout=self.timeout) as resp:
-                path.write_bytes(resp.read())
+            self._download_resumable(path)
         return pd.read_csv(path, parse_dates=["date"])
 
     def get_prices(
