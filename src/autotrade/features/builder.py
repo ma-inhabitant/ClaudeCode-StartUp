@@ -19,11 +19,15 @@ class FeatureBuilder:
         self,
         sma_fast: int = 20,
         sma_slow: int = 50,
+        sma_trend: int = 200,
         rsi_period: int = 14,
         atr_period: int = 14,
     ):
         self.sma_fast = sma_fast
         self.sma_slow = sma_slow
+        # sma_trend … 長期トレンド（相場全体の向き）を見るための長い移動平均。
+        # 例: 200 なら「200日移動平均線」。株価がこれより上なら全体が上昇基調。
+        self.sma_trend = sma_trend
         self.rsi_period = rsi_period
         self.atr_period = atr_period
 
@@ -37,6 +41,7 @@ class FeatureBuilder:
             feat["ret1"] = close.pct_change()
             feat["sma_fast"] = close.rolling(self.sma_fast).mean()
             feat["sma_slow"] = close.rolling(self.sma_slow).mean()
+            feat["sma_trend"] = close.rolling(self.sma_trend).mean()
             feat["rsi"] = self._rsi(close, self.rsi_period)
             feat["atr"] = self._atr(df, self.atr_period)
             out[sym] = feat

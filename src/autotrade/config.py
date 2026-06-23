@@ -19,8 +19,12 @@ from autotrade.features.builder import FeatureBuilder
 from autotrade.markets.calendar import get_calendar
 from autotrade.risk.manager import RiskManager, RiskParams
 from autotrade.strategies.sma_crossover import SMACrossoverStrategy
+from autotrade.strategies.trend_filter import TrendFilterStrategy
 
-STRATEGIES = {"sma_crossover": SMACrossoverStrategy}
+STRATEGIES = {
+    "sma_crossover": SMACrossoverStrategy,
+    "trend_filter": TrendFilterStrategy,
+}
 
 
 def load_config(path: str) -> Dict[str, Any]:
@@ -62,7 +66,9 @@ def build_engine(cfg: Dict[str, Any]) -> BacktestEngine:
     strat_name = strat_cfg.get("name", "sma_crossover")
     if strat_name not in STRATEGIES:
         raise ValueError(f"未知の戦略: {strat_name}（対応: {list(STRATEGIES)}）")
-    strategy = STRATEGIES[strat_name]()
+    # name 以外のキーは戦略のパラメータとしてそのまま渡す（例: trend_filter の rsi_max）。
+    strat_params = {k: v for k, v in strat_cfg.items() if k != "name"}
+    strategy = STRATEGIES[strat_name](**strat_params)
 
     risk = RiskManager(RiskParams(**(cfg.get("risk", {}) or {})))
     cost = CostModel(**(cfg.get("cost", {}) or {}))

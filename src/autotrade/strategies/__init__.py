@@ -2,5 +2,6 @@
 
 from autotrade.strategies.base import Strategy
 from autotrade.strategies.sma_crossover import SMACrossoverStrategy
+from autotrade.strategies.trend_filter import TrendFilterStrategy
 
-__all__ = ["Strategy", "SMACrossoverStrategy"]
+__all__ = ["Strategy", "SMACrossoverStrategy", "TrendFilterStrategy"]
