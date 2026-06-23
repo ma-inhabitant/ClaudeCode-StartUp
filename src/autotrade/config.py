@@ -18,12 +18,14 @@ from autotrade.execution.base import CostModel
 from autotrade.features.builder import FeatureBuilder
 from autotrade.markets.calendar import get_calendar
 from autotrade.risk.manager import RiskManager, RiskParams
+from autotrade.strategies.ml_logreg import MLLogRegStrategy
 from autotrade.strategies.sma_crossover import SMACrossoverStrategy
 from autotrade.strategies.trend_filter import TrendFilterStrategy
 
 STRATEGIES = {
     "sma_crossover": SMACrossoverStrategy,
     "trend_filter": TrendFilterStrategy,
+    "ml_logreg": MLLogRegStrategy,
 }
 
 
