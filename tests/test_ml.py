@@ -44,6 +44,17 @@ def test_ml_is_deterministic():
     assert s1.equals(s2)
 
 
+def test_ml_ranking_mode_longs_exactly_top_k():
+    feat = _features()  # 3銘柄
+    strat = MLLogRegStrategy(min_train_days=252, retrain_every=63, top_k=2)
+    sig = strat.generate_signals(feat)
+    later = sig.iloc[252:]
+    # 全銘柄の特徴量がそろう行では、ちょうど top_k(=2) 銘柄がロング。
+    rows_all_ready = later.dropna()
+    daily_longs = rows_all_ready.sum(axis=1)
+    assert (daily_longs == 2).all()
+
+
 def test_ml_no_lookahead_signal_uses_only_past_models():
     # min_train_days を変えると、早い時期のシグナル開始位置も後ろにずれる
     # （未来データで前倒しに学習していない＝拡張窓が効いている証拠）。

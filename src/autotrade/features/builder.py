@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Dict
 
+import numpy as np
 import pandas as pd
 
 from autotrade.data.base import PriceData
@@ -54,7 +55,8 @@ class FeatureBuilder:
         loss = -delta.clip(upper=0.0)
         avg_gain = gain.rolling(period).mean()
         avg_loss = loss.rolling(period).mean()
-        rs = avg_gain / avg_loss.replace(0.0, pd.NA)
+        # ゼロ除算は np.nan に（pd.NA だと float 変換で詰まるため np.nan を使う）。
+        rs = avg_gain / avg_loss.replace(0.0, np.nan)
         return 100.0 - (100.0 / (1.0 + rs))
 
     @staticmethod

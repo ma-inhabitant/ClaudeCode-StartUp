@@ -1,0 +1,81 @@
+# 日本株（JPX）— 横断ランキング戦略用（実データ・大きめユニバース）
+#
+# 東証プライムの主要大型株を30銘柄（.T サフィックス）。
+# 実行例:
+#   python -m autotrade.cli backtest --config config/jp_xs.yaml
+#   python -m autotrade.cli walkforward --config config/jp_xs.yaml
+#
+# 【ネットワーク】query1/query2.finance.yahoo.com への egress 許可が必要。
+
+market: JPX
+
+data:
+  source: yfinance
+  yfinance:
+    auto_adjust: true
+
+universe:
+  - "7203.T"   # トヨタ自動車
+  - "6758.T"   # ソニーグループ
+  - "9984.T"   # ソフトバンクグループ
+  - "8306.T"   # 三菱UFJ
+  - "7974.T"   # 任天堂
+  - "6861.T"   # キーエンス
+  - "9433.T"   # KDDI
+  - "4063.T"   # 信越化学
+  - "6098.T"   # リクルート
+  - "8035.T"   # 東京エレクトロン
+  - "6954.T"   # ファナック
+  - "6367.T"   # ダイキン工業
+  - "4502.T"   # 武田薬品
+  - "4519.T"   # 中外製薬
+  - "8316.T"   # 三井住友FG
+  - "8411.T"   # みずほFG
+  - "9432.T"   # NTT
+  - "6501.T"   # 日立製作所
+  - "6902.T"   # デンソー
+  - "7267.T"   # ホンダ
+  - "7751.T"   # キヤノン
+  - "6981.T"   # 村田製作所
+  - "4661.T"   # オリエンタルランド
+  - "9020.T"   # JR東日本
+  - "2914.T"   # 日本たばこ産業
+  - "4452.T"   # 花王
+  - "8058.T"   # 三菱商事
+  - "8001.T"   # 伊藤忠商事
+  - "6594.T"   # ニデック
+  - "7741.T"   # HOYA
+
+period:
+  start: "2015-01-01"
+  end: "2023-12-31"
+
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  sma_trend: 100
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: xs_momentum
+  lookback: 250   # 約1年。短すぎると売買過多になりやすい
+  skip: 20
+  top_k: 10
+
+risk:
+  # モメンタムは「勝者を伸ばす」戦略。利確(take_profit)は大化け株を途中で切るのでオフにする。
+  # トレーリングを使う場合は trailing_stop_pct を設定（締めすぎると売買過多になる点に注意）。
+  stop_loss_pct: 0.20
+  take_profit_pct: null
+  per_symbol_max_weight: 0.10
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.35
+
+cost:
+  commission_rate: 0.005
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0

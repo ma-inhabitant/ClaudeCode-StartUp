@@ -4,10 +4,12 @@ from autotrade.strategies.base import Strategy
 from autotrade.strategies.ml_logreg import MLLogRegStrategy
 from autotrade.strategies.sma_crossover import SMACrossoverStrategy
 from autotrade.strategies.trend_filter import TrendFilterStrategy
+from autotrade.strategies.xs_momentum import CrossSectionalMomentumStrategy
 
 __all__ = [
     "Strategy",
     "SMACrossoverStrategy",
     "TrendFilterStrategy",
     "MLLogRegStrategy",
+    "CrossSectionalMomentumStrategy",
 ]

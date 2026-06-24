@@ -46,12 +46,16 @@ class MLLogRegStrategy(Strategy):
         retrain_every: int = 63,
         min_train_days: int = 252,
         prob_threshold: float = 0.55,
+        top_k: int = 0,
         seed: int = 42,
     ):
         self.forward_days = int(forward_days)
         self.retrain_every = int(retrain_every)
         self.min_train_days = int(min_train_days)
         self.prob_threshold = float(prob_threshold)
+        # top_k>0 ならランキングモード: 各日「上昇確率」の上位 top_k 銘柄だけロング。
+        # 0（既定）なら閾値モード: prob_threshold を超えた銘柄をロング。
+        self.top_k = int(top_k)
         self.seed = int(seed)
 
     # --- 特徴量・ラベルの組み立て ----------------------------------------
@@ -88,7 +92,7 @@ class MLLogRegStrategy(Strategy):
             feat = features[sym]
             X = self._design(feat)
             y = self._forward_up(feat)
-            X_by_sym[sym] = X[FEATURE_COLS].to_numpy(dtype=float)
+            X_by_sym[sym] = X[FEATURE_COLS].to_numpy(dtype=float, na_value=np.nan)
             y_by_sym[sym] = y.to_numpy(dtype=float)
             x_ok = ~np.isnan(X_by_sym[sym]).any(axis=1)
             valid_by_sym[sym] = x_ok  # 予測に使える行（特徴量がそろっている）
@@ -123,13 +127,24 @@ class MLLogRegStrategy(Strategy):
 
             # 予測: ブロック内の各日について、特徴量がそろう銘柄のみ判定。
             for i in range(block_start, block_end):
+                probs = {}  # sym -> 上昇確率
                 for sym in symbols:
                     if not valid_by_sym[sym][i]:
                         signals[sym][i] = 0.0
                         continue
                     x = X_by_sym[sym][i].reshape(1, -1)
-                    p_up = float(model.predict_proba(scaler.transform(x))[0, 1])
-                    signals[sym][i] = 1.0 if p_up >= self.prob_threshold else 0.0
+                    probs[sym] = float(model.predict_proba(scaler.transform(x))[0, 1])
+
+                if self.top_k > 0:
+                    # ランキングモード: 上昇確率の高い上位 top_k 銘柄だけロング。
+                    ranked = sorted(probs, key=lambda s: probs[s], reverse=True)
+                    chosen = set(ranked[: self.top_k])
+                    for sym in probs:
+                        signals[sym][i] = 1.0 if sym in chosen else 0.0
+                else:
+                    # 閾値モード: 上昇確率が閾値を超えた銘柄をロング。
+                    for sym, p_up in probs.items():
+                        signals[sym][i] = 1.0 if p_up >= self.prob_threshold else 0.0
 
         return pd.DataFrame(
             {sym: pd.Series(signals[sym], index=dates) for sym in symbols}

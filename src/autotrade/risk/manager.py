@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
@@ -22,10 +22,15 @@ from autotrade.types import Fill, Order, Side
 @dataclass
 class RiskParams:
     stop_loss_pct: float = 0.08          # 損切り: 取得価格から -8%
-    take_profit_pct: float = 0.20        # 利確: 取得価格から +20%
+    take_profit_pct: Optional[float] = 0.20  # 利確: 取得価格から +20%。None/0 で利確オフ
+    trailing_stop_pct: Optional[float] = None  # トレーリングストップ: 取得後の最高値から -x%。Noneでオフ
     per_symbol_max_weight: float = 0.20  # 1銘柄あたり最大エクスポージャ（資産比）
     max_gross_exposure: float = 1.00     # ポートフォリオ全体の最大エクスポージャ
     max_drawdown_pct: float = 0.20       # 最大DD: -20% でサーキットブレーカー作動
+
+    # 補足: 利確(take_profit)はモメンタム系の「勝者を伸ばす」戦略と相性が悪い
+    # （大化け株を途中で売ってしまう）。その場合は take_profit_pct=None にして
+    # trailing_stop_pct で“伸ばしつつ守る”のが定石。
 
 
 class RiskManager:
@@ -53,7 +58,12 @@ class RiskManager:
         pos = portfolio.position(fill.symbol)
         if pos.is_open:
             pos.stop_price = pos.entry_price * (1.0 - self.p.stop_loss_pct)
-            pos.tp_price = pos.entry_price * (1.0 + self.p.take_profit_pct)
+            # 利確は任意（None/0 でオフ）。モメンタム系では外すことが多い。
+            if self.p.take_profit_pct:
+                pos.tp_price = pos.entry_price * (1.0 + self.p.take_profit_pct)
+            else:
+                pos.tp_price = None
+            pos.high_water = pos.entry_price  # トレーリングの基準を初期化
 
     def check_stops(self, portfolio: Portfolio, prices: PriceData, date, broker) -> None:
         """当日の high/low で損切り・利確を判定し、ヒットしたら手仕舞う。"""
@@ -63,6 +73,13 @@ class RiskManager:
             low = prices.price(sym, date, "low")
             high = prices.price(sym, date, "high")
             open_ = prices.price(sym, date, "open")
+
+            # トレーリングストップ: 取得後の最高値を更新し、そこから -x% に損切り線を引き上げる
+            # （下げることはしない＝利益を守りつつ伸ばす）。
+            if self.p.trailing_stop_pct:
+                pos.high_water = max(pos.high_water, high)
+                trail = pos.high_water * (1.0 - self.p.trailing_stop_pct)
+                pos.stop_price = max(pos.stop_price or 0.0, trail)
 
             # 損切りを優先（保守的）。ギャップダウン時は始値で約定。
             if pos.stop_price is not None and low <= pos.stop_price:

@@ -56,6 +56,7 @@ class Position:
     entry_date: object = None
     stop_price: Optional[float] = None
     tp_price: Optional[float] = None
+    high_water: float = 0.0  # 取得後の最高値（トレーリングストップの基準）
 
     @property
     def is_open(self) -> bool:

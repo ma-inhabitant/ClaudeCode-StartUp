@@ -1,0 +1,86 @@
+# 米国株（US）— 横断ランキング戦略用（実データ・大きめユニバース）
+#
+# ランキング戦略は銘柄数が多いほど“選別”が効く。主要大型株を30銘柄。
+# 実行例:
+#   python -m autotrade.cli backtest --config config/us_xs.yaml
+#   python -m autotrade.cli walkforward --config config/us_xs.yaml
+#
+# 【ネットワーク】query1/query2.finance.yahoo.com への egress 許可が必要。
+
+market: US
+
+data:
+  source: yfinance
+  yfinance:
+    auto_adjust: true
+
+universe:
+  - AAPL
+  - MSFT
+  - AMZN
+  - GOOGL
+  - META
+  - NVDA
+  - JPM
+  - JNJ
+  - V
+  - PG
+  - HD
+  - MA
+  - UNH
+  - KO
+  - PEP
+  - DIS
+  - CSCO
+  - INTC
+  - VZ
+  - WMT
+  - MRK
+  - PFE
+  - T
+  - NKE
+  - MCD
+  - ABT
+  - CVX
+  - XOM
+  - ADBE
+  - CRM
+
+period:
+  start: "2015-01-01"
+  end: "2023-12-31"
+
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  sma_trend: 100
+  rsi_period: 14
+  atr_period: 14
+
+# 横断モメンタム: 全銘柄を勢いで順位付けし上位10銘柄をロング。
+# top_k(10) は最大保有数(max_gross/per_symbol=1.0/0.10=10)と一致させている。
+strategy:
+  name: xs_momentum
+  lookback: 250   # 約1年。短すぎると売買過多になりやすい
+  skip: 20
+  top_k: 10
+
+risk:
+  # モメンタムは「勝者を伸ばす」戦略。利確(take_profit)は大化け株を途中で切るのでオフにする。
+  # トレーリングを使う場合は trailing_stop_pct を設定（締めすぎると売買過多になる点に注意）。
+  stop_loss_pct: 0.20
+  take_profit_pct: null
+  per_symbol_max_weight: 0.10
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.35
+
+cost:
+  commission_rate: 0.003
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0025
+
+fx:
+  usd_jpy: 150
