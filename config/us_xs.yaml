@@ -50,7 +50,7 @@ period:
   start: "2015-01-01"
   end: "2023-12-31"
 
-initial_cash: 10000
+initial_cash: 10000   # USD建て。実予算5万円≈$330だが整数株の都合で研究用に大きめ（米国は端株可）
 
 features:
   sma_fast: 20

@@ -31,7 +31,7 @@ period:
   start: "2021-01-01"
   end: "2023-12-31"
 
-initial_cash: 10000
+initial_cash: 50000   # 円。5万円スタート
 
 features:
   sma_fast: 20

@@ -24,8 +24,8 @@ period:
   start: "2021-01-01"
   end: "2023-12-31"
 
-# Phase 1/2 は資金額に依存しないが、Phase 3（少額・単元未満株）を見据えて1万円を既定に。
-initial_cash: 10000
+# Phase 1/2 は資金額に依存しないが、Phase 3（少額・単元未満株）を見据えて5万円を既定に。
+initial_cash: 50000
 
 features:
   sma_fast: 20
