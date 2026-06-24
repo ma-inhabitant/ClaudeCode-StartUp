@@ -48,6 +48,46 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_defensive(args: argparse.Namespace) -> int:
+    from autotrade.backtest.defensive import defensive_overlay
+    from autotrade.backtest.metrics import format_comparison
+    from autotrade.execution.base import CostModel
+    from autotrade.markets.calendar import get_calendar
+
+    cfg = load_config(args.config)
+    if args.start or args.end:
+        cfg.setdefault("period", {})
+        if args.start:
+            cfg["period"]["start"] = args.start
+        if args.end:
+            cfg["period"]["end"] = args.end
+
+    engine = build_engine(cfg)
+    prices = engine.prices
+    currency = get_calendar(cfg.get("market", "JPX")).currency
+    cost = CostModel(**(cfg.get("cost", {}) or {}))
+    initial = float(cfg.get("initial_cash", 10_000))
+
+    res = defensive_overlay(
+        prices, trend_days=args.trend_days, cost_model=cost,
+        initial_cash=initial, currency=currency,
+    )
+    print(format_metrics(res.defensive_metrics))
+    print(f"\n投資していた日の割合: {res.days_invested_pct:.1f}%（残りは現金で回避）")
+    print()
+    # ここでの「持ち続け」は同じ等金額インデックス（防御オーバーレイとの差は降りる判断だけ）。
+    print(format_comparison(res.defensive_metrics, res.buy_hold_metrics))
+
+    if args.save_equity:
+        out = Path(args.save_equity)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        df = res.defensive_curve.to_frame()
+        df["buy_and_hold"] = res.buy_hold_curve
+        df.to_csv(out, header=True)
+        print(f"\n資産曲線を保存しました: {out}")
+    return 0
+
+
 def cmd_longshort(args: argparse.Namespace) -> int:
     from autotrade.backtest.benchmark import buy_and_hold_equity
     from autotrade.backtest.long_short import long_short_backtest
@@ -169,6 +209,14 @@ def main(argv=None) -> int:
     ls.add_argument("--end", help="データ取得終了日を上書き")
     ls.add_argument("--save-equity", help="資産曲線を CSV 出力（任意）")
     ls.set_defaults(func=cmd_longshort)
+
+    df = sub.add_parser("defensive", help="防御的オーバーレイ（インデックス＋暴落回避）の検証")
+    df.add_argument("--config", required=True, help="設定 YAML のパス（例: config/us_xs.yaml）")
+    df.add_argument("--trend-days", type=int, default=200, help="相場の向きを見る移動平均日数（既定200）")
+    df.add_argument("--start", help="データ取得開始日を上書き")
+    df.add_argument("--end", help="データ取得終了日を上書き")
+    df.add_argument("--save-equity", help="防御と持ち続けの資産曲線を CSV 出力（任意）")
+    df.set_defaults(func=cmd_defensive)
 
     args = parser.parse_args(argv)
     return args.func(args)
