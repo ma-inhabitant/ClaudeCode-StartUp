@@ -48,6 +48,63 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_longshort(args: argparse.Namespace) -> int:
+    from autotrade.backtest.benchmark import buy_and_hold_equity
+    from autotrade.backtest.long_short import long_short_backtest
+    from autotrade.backtest.metrics import format_comparison
+    from autotrade.execution.base import CostModel
+    from autotrade.markets.calendar import get_calendar
+
+    cfg = load_config(args.config)
+    if args.start or args.end:
+        cfg.setdefault("period", {})
+        if args.start:
+            cfg["period"]["start"] = args.start
+        if args.end:
+            cfg["period"]["end"] = args.end
+
+    engine = build_engine(cfg)  # データ取得とユニバース整列を流用
+    prices = engine.prices
+    currency = get_calendar(cfg.get("market", "JPX")).currency
+    cost = CostModel(**(cfg.get("cost", {}) or {}))
+    initial = float(cfg.get("initial_cash", 10_000))
+
+    res = long_short_backtest(
+        prices,
+        lookback=args.lookback,
+        skip=args.skip,
+        top_k=args.top_k,
+        bottom_k=args.bottom_k,
+        rebalance_days=args.rebalance_days,
+        gross=args.gross,
+        cost_model=cost,
+        initial_cash=initial,
+        currency=currency,
+    )
+    print(format_metrics(res.metrics))
+    print(
+        f"\nリバランス回数: {res.rebalances} / "
+        f"平均ロング {res.avg_long_names:.0f}銘柄・平均ショート {res.avg_short_names:.0f}銘柄"
+    )
+
+    # 同じ評価区間のバイ&ホールドと比較。
+    if len(res.equity_curve) > 0:
+        bench = buy_and_hold_equity(prices, cost, initial)
+        lo, hi = res.equity_curve.index[0], res.equity_curve.index[-1]
+        bench = bench[(bench.index >= lo) & (bench.index <= hi)]
+        from autotrade.backtest.metrics import compute_metrics
+
+        print()
+        print(format_comparison(res.metrics, compute_metrics(bench, [], currency)))
+
+    if args.save_equity:
+        out = Path(args.save_equity)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        res.equity_curve.to_csv(out, header=True)
+        print(f"\n資産曲線を保存しました: {out}")
+    return 0
+
+
 def cmd_walkforward(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     # 期間の上書き（フォールド数を増やすため長い履歴を使うと有効）。
@@ -99,6 +156,19 @@ def main(argv=None) -> int:
     wf.add_argument("--end", help="データ取得終了日を上書き")
     wf.add_argument("--save-equity", help="本番想定とベンチマークの資産曲線を CSV 出力（任意）")
     wf.set_defaults(func=cmd_walkforward)
+
+    ls = sub.add_parser("longshort", help="ロングショート評価（上位ロング・下位ショート／研究用）")
+    ls.add_argument("--config", required=True, help="設定 YAML のパス（例: config/us_xs.yaml）")
+    ls.add_argument("--lookback", type=int, default=250, help="モメンタムの参照期間（日, 既定250）")
+    ls.add_argument("--skip", type=int, default=20, help="直近で除外する日数（既定20）")
+    ls.add_argument("--top-k", type=int, default=5, help="ロングする上位銘柄数（既定5）")
+    ls.add_argument("--bottom-k", type=int, default=5, help="ショートする下位銘柄数（既定5）")
+    ls.add_argument("--rebalance-days", type=int, default=21, help="リバランス間隔（日, 既定21≒月次）")
+    ls.add_argument("--gross", type=float, default=1.0, help="総建玉（グロス, 既定1.0）")
+    ls.add_argument("--start", help="データ取得開始日を上書き")
+    ls.add_argument("--end", help="データ取得終了日を上書き")
+    ls.add_argument("--save-equity", help="資産曲線を CSV 出力（任意）")
+    ls.set_defaults(func=cmd_longshort)
 
     args = parser.parse_args(argv)
     return args.func(args)
