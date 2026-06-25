@@ -48,6 +48,78 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plan(args: argparse.Namespace) -> int:
+    from autotrade.accumulation import plan_purchases
+    from autotrade.execution.base import CostModel
+    from autotrade.markets.calendar import get_calendar
+
+    cfg = load_config(args.config)
+    engine = build_engine(cfg)
+    prices = engine.prices
+    currency = get_calendar(cfg.get("market", "JPX")).currency
+    cost = CostModel(**(cfg.get("cost", {}) or {}))
+
+    # 「今日」＝取得データの最終営業日の終値で、予算ぶんのお買い物リストを作る。
+    as_of = prices.dates[-1]
+    prices_today = {s: prices.price(s, as_of, "close") for s in prices.symbols if prices.has_price(s, as_of)}
+    budget = float(args.budget)
+    buys, spent, leftover = plan_purchases(prices_today, {}, budget, cost)
+
+    print(f"==== 今月のお買い物リスト（基準日 {as_of.date()} / 予算 {budget:,.0f} {currency}）====")
+    print("※ 上がる予想ではなく『分散バスケットを均等に近づける』ための割り当てです。")
+    if not buys:
+        print("  予算が小さく、1株も買えませんでした。予算を増やすか低価格の銘柄を検討してください。")
+    for s in sorted(buys):
+        px = prices_today[s]
+        print(f"  {s:<8} {buys[s]:>3}株  @ {px:,.2f} {currency}  ≈ {buys[s]*px:,.0f} {currency}")
+    print(f"  ----")
+    print(f"  使う金額 ≈ {spent:,.0f} {currency} / 余り ≈ {leftover:,.0f} {currency}（コスト込み概算）")
+    print(f"  買付銘柄数: {len(buys)} / {len(prices_today)}")
+    return 0
+
+
+def cmd_accumulate(args: argparse.Namespace) -> int:
+    from autotrade.accumulation import simulate_accumulation
+    from autotrade.execution.base import CostModel
+    from autotrade.markets.calendar import get_calendar
+
+    cfg = load_config(args.config)
+    if args.start or args.end:
+        cfg.setdefault("period", {})
+        if args.start:
+            cfg["period"]["start"] = args.start
+        if args.end:
+            cfg["period"]["end"] = args.end
+
+    engine = build_engine(cfg)
+    prices = engine.prices
+    currency = get_calendar(cfg.get("market", "JPX")).currency
+    cost = CostModel(**(cfg.get("cost", {}) or {}))
+    initial = float(cfg.get("initial_cash", 50_000)) if args.initial is None else float(args.initial)
+
+    res = simulate_accumulation(prices, initial, float(args.monthly), cost, currency=currency)
+
+    years = res.months / 12.0
+    print("==== 積立シミュレーション（分散バスケットを買い増して持ち続け）====")
+    print(f"  期間          : {prices.dates[0].date()} 〜 {prices.dates[-1].date()}（約{years:.1f}年・{res.months}か月）")
+    print(f"  初期資金      : {initial:,.0f} {currency}")
+    print(f"  毎月の積立    : {float(args.monthly):,.0f} {currency}")
+    print(f"  ----")
+    print(f"  投入総額      : {res.total_contributed:,.0f} {currency}（自分で入れたお金）")
+    print(f"  最終評価額    : {res.final_value:,.0f} {currency}")
+    print(f"  増えた額      : {res.gain:,.0f} {currency}（{res.gain_pct*100:+.1f}%）")
+    print(f"  買い付けた株数: 累計 {res.total_shares_bought} 株")
+
+    if args.save_equity:
+        out = Path(args.save_equity)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        df = res.equity_curve.to_frame()
+        df["contributed"] = res.contributed_curve
+        df.to_csv(out, header=True)
+        print(f"\n資産・投入額の推移を保存しました: {out}")
+    return 0
+
+
 def cmd_defensive(args: argparse.Namespace) -> int:
     from autotrade.backtest.defensive import defensive_overlay
     from autotrade.backtest.metrics import format_comparison
@@ -217,6 +289,20 @@ def main(argv=None) -> int:
     df.add_argument("--end", help="データ取得終了日を上書き")
     df.add_argument("--save-equity", help="防御と持ち続けの資産曲線を CSV 出力（任意）")
     df.set_defaults(func=cmd_defensive)
+
+    pl = sub.add_parser("plan", help="今月のお買い物リスト（分散を保つ買い指示）を出力")
+    pl.add_argument("--config", required=True, help="設定 YAML のパス（例: config/jp_xs.yaml）")
+    pl.add_argument("--budget", type=float, required=True, help="今回の購入予算（現地通貨）")
+    pl.set_defaults(func=cmd_plan)
+
+    ac = sub.add_parser("accumulate", help="積立シミュレーション（買い増して持ち続け）")
+    ac.add_argument("--config", required=True, help="設定 YAML のパス（例: config/jp_xs.yaml）")
+    ac.add_argument("--monthly", type=float, default=10_000, help="毎月の積立額（既定10000）")
+    ac.add_argument("--initial", type=float, default=None, help="初期資金（既定は設定の initial_cash）")
+    ac.add_argument("--start", help="データ取得開始日を上書き")
+    ac.add_argument("--end", help="データ取得終了日を上書き")
+    ac.add_argument("--save-equity", help="資産・投入額の推移を CSV 出力（任意）")
+    ac.set_defaults(func=cmd_accumulate)
 
     args = parser.parse_args(argv)
     return args.func(args)
