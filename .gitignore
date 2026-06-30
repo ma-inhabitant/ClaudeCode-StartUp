@@ -18,6 +18,12 @@ data/cache/
 output/
 *.parquet
 
+# 個人の保有データ・plan/status の生成物（コミットしない。テンプレは examples/holdings_sample.csv のみ）
+examples/buy_list.csv
+examples/holdings_next.csv
+examples/my_holdings*.csv
+my_holdings*.csv
+
 # テスト・ツール
 .pytest_cache/
 .mypy_cache/
