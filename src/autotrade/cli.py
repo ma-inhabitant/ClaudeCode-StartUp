@@ -49,7 +49,12 @@ def cmd_backtest(args: argparse.Namespace) -> int:
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
-    from autotrade.accumulation import plan_purchases
+    from autotrade.accumulation import (
+        load_holdings,
+        plan_purchases,
+        write_holdings_csv,
+        write_plan_csv,
+    )
     from autotrade.execution.base import CostModel
     from autotrade.markets.calendar import get_calendar
 
@@ -62,19 +67,55 @@ def cmd_plan(args: argparse.Namespace) -> int:
     # 「今日」＝取得データの最終営業日の終値で、予算ぶんのお買い物リストを作る。
     as_of = prices.dates[-1]
     prices_today = {s: prices.price(s, as_of, "close") for s in prices.symbols if prices.has_price(s, as_of)}
+
+    # 現在の保有を読み込む（未指定なら保有ゼロから）。
+    holdings = load_holdings(args.holdings) if args.holdings else {}
+    unknown = sorted(set(holdings) - set(prices_today))
+    if unknown:
+        print(f"⚠ 保有CSVの次の銘柄はユニバース/価格に無いため無視します: {', '.join(unknown)}\n")
+    holdings = {s: v for s, v in holdings.items() if s in prices_today}
+
     budget = float(args.budget)
-    buys, spent, leftover = plan_purchases(prices_today, {}, budget, cost)
+    buys, spent, leftover = plan_purchases(prices_today, holdings, budget, cost)
+
+    # 買い増し後の保有と比率（分散の現状確認）。
+    n = len(prices_today)
+    target = 1.0 / n if n else 0.0
+    proj = {s: holdings.get(s, 0.0) + buys.get(s, 0.0) for s in prices_today}
+    proj_total = sum(proj[s] * prices_today[s] for s in prices_today)
 
     print(f"==== 今月のお買い物リスト（基準日 {as_of.date()} / 予算 {budget:,.0f} {currency}）====")
     print("※ 上がる予想ではなく『分散バスケットを均等に近づける』ための割り当てです。")
+    print(f"   目標比率 = 均等 {target*100:.1f}%/銘柄（全{n}銘柄）\n")
+
     if not buys:
-        print("  予算が小さく、1株も買えませんでした。予算を増やすか低価格の銘柄を検討してください。")
-    for s in sorted(buys):
-        px = prices_today[s]
-        print(f"  {s:<8} {buys[s]:>3}株  @ {px:,.2f} {currency}  ≈ {buys[s]*px:,.0f} {currency}")
-    print(f"  ----")
-    print(f"  使う金額 ≈ {spent:,.0f} {currency} / 余り ≈ {leftover:,.0f} {currency}（コスト込み概算）")
-    print(f"  買付銘柄数: {len(buys)} / {len(prices_today)}")
+        print("  予算が小さく、1株も買えませんでした。予算を増やすか低価格の銘柄を検討してください。\n")
+    else:
+        print("  【買う銘柄】")
+        for s in sorted(buys):
+            px = prices_today[s]
+            print(f"    {s:<8} {buys[s]:>3}株  @ {px:,.2f}  ≈ {buys[s]*px:,.0f} {currency}")
+        print(f"  ----  使う金額 ≈ {spent:,.0f} {currency} / 余り ≈ {leftover:,.0f} {currency}（コスト込み概算）\n")
+
+    # 保有がある（or 買う）銘柄について、買い増し後の比率を表示。
+    active = sorted(s for s in prices_today if proj[s] > 0)
+    if active:
+        print(f"  【買い増し後の保有と比率】（投資額 ≈ {proj_total:,.0f} {currency}）")
+        for s in active:
+            w = (proj[s] * prices_today[s] / proj_total * 100) if proj_total > 0 else 0.0
+            cur = holdings.get(s, 0.0)
+            add = buys.get(s, 0)
+            mark = "←目標近辺" if abs(w - target * 100) <= target * 100 * 0.5 else ""
+            print(f"    {s:<8} {cur:>4.0f}→{proj[s]:>4.0f}株  比率 {w:4.1f}%  {('(+'+str(add)+')') if add else '':<5}{mark}")
+    held_names = sum(1 for s in prices_today if proj[s] > 0)
+    print(f"\n  分散状況: {held_names}/{n} 銘柄を保有（均等まであと {max(0, n-held_names)} 銘柄）")
+
+    if args.save:
+        write_plan_csv(args.save, buys, prices_today)
+        print(f"  お買い物リストを保存: {args.save}")
+    if args.out_holdings:
+        write_holdings_csv(args.out_holdings, proj)
+        print(f"  買い増し後の保有を保存（次回 --holdings に使える）: {args.out_holdings}")
     return 0
 
 
@@ -293,6 +334,9 @@ def main(argv=None) -> int:
     pl = sub.add_parser("plan", help="今月のお買い物リスト（分散を保つ買い指示）を出力")
     pl.add_argument("--config", required=True, help="設定 YAML のパス（例: config/jp_xs.yaml）")
     pl.add_argument("--budget", type=float, required=True, help="今回の購入予算（現地通貨）")
+    pl.add_argument("--holdings", help="現在の保有銘柄CSV（列: symbol,shares）。未指定なら保有ゼロから")
+    pl.add_argument("--save", help="お買い物リストをCSV出力するパス（任意）")
+    pl.add_argument("--out-holdings", help="買い増し後の保有をCSV出力（次回 --holdings に使える）")
     pl.set_defaults(func=cmd_plan)
 
     ac = sub.add_parser("accumulate", help="積立シミュレーション（買い増して持ち続け）")

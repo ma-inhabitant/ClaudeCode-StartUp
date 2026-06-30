@@ -289,7 +289,9 @@ xs_momentum、ML はランキングモードも）・リスク（損切り・**�
 BacktestBroker）・評価（Metrics）・**バイ&ホールド比較**・**ウォークフォワード検証**・
 **ロングショート評価（研究用 longshort）**・**防御オーバーレイ（defensive）**・
 **積立支援（plan＝お買い物リスト / accumulate＝積立シミュレーション）**・
-CLI・テスト（45件）まで実装済みで、実データ（yfinance）でエンドツーエンドに動作する。
+CLI・テスト（53件）まで実装済みで、実データ（yfinance）でエンドツーエンドに動作する。
+`plan` は `--holdings`（保有CSV読込）/ `--save`（買い指示CSV）/ `--out-holdings`（買い増し後の保有を
+次回用に保存）に対応し、毎月「保有を読む→足りない銘柄を買い足す→保有を書き戻す」を回せる。
 
 > 別データソース: Yahoo(yfinance) が egress 許可外で塞がれる環境向けに、`raw.githubusercontent.com`
 > 経由で実在の S&P500 日足（plotly/datasets, 2013–2018）を取得する `SP500GithubSource`
@@ -304,6 +306,7 @@ CLI・テスト（45件）まで実装済みで、実データ（yfinance）で�
 - ロングショート（研究用）: `python -m autotrade.cli longshort --config config/us_xs.yaml`
 - 防御オーバーレイ（暴落回避の検証）: `python -m autotrade.cli defensive --config config/us_xs.yaml`
 - 今月のお買い物リスト（持ち続け積立の買い指示）: `python -m autotrade.cli plan --config config/jp_xs.yaml --budget 50000`
+  - 保有を踏まえた追加購入（毎月運用）: `... plan --config config/jp_xs.yaml --budget 10000 --holdings my_holdings.csv --out-holdings my_holdings.csv`
 - 積立シミュレーション: `python -m autotrade.cli accumulate --config config/jp_xs.yaml --initial 50000 --monthly 10000`
 - S&P500実データ(GitHubホスト): `python -m autotrade.cli backtest --config config/us_real_sp500.yaml`
 

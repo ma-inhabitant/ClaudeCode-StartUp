@@ -2,7 +2,13 @@
 
 import pandas as pd
 
-from autotrade.accumulation import plan_purchases, simulate_accumulation
+from autotrade.accumulation import (
+    load_holdings,
+    plan_purchases,
+    simulate_accumulation,
+    write_holdings_csv,
+    write_plan_csv,
+)
 from autotrade.data.base import PriceData
 from autotrade.execution.base import CostModel
 
@@ -36,6 +42,43 @@ def test_plan_buys_nothing_when_too_poor():
     prices = {"A": 5000.0}
     buys, spent, leftover = plan_purchases(prices, {}, 1000, CostModel())
     assert buys == {} and spent == 0.0 and leftover == 1000.0
+
+
+def test_load_holdings_roundtrip(tmp_path):
+    # 書き出し→読み込みで保有が一致する（日本株ティッカーの文字列も保持）。
+    path = tmp_path / "holdings.csv"
+    write_holdings_csv(str(path), {"7203.T": 3, "9432.T": 10})
+    loaded = load_holdings(str(path))
+    assert loaded == {"7203.T": 3.0, "9432.T": 10.0}
+
+
+def test_load_holdings_missing_file_is_empty():
+    assert load_holdings("does_not_exist_12345.csv") == {}
+
+
+def test_load_holdings_japanese_headers(tmp_path):
+    # 日本語ヘッダ（銘柄,株数）でも読める。
+    path = tmp_path / "h.csv"
+    path.write_text("銘柄,株数\n7203.T,2\n6758.T,1\n", encoding="utf-8")
+    assert load_holdings(str(path)) == {"7203.T": 2.0, "6758.T": 1.0}
+
+
+def test_write_plan_csv(tmp_path):
+    path = tmp_path / "plan.csv"
+    write_plan_csv(str(path), {"A": 2}, {"A": 100.0})
+    text = path.read_text(encoding="utf-8-sig")
+    assert "symbol,shares,price,est_cost" in text
+    assert "A,2,100.00,200" in text
+
+
+def test_plan_with_existing_holdings_balances_toward_target():
+    # A に偏った保有 → 予算は B・C を優先して買い、分散に近づける。
+    prices = {"A": 1000.0, "B": 1000.0, "C": 1000.0}
+    holdings = load_holdings("none.csv")  # 空
+    holdings = {"A": 8.0}
+    buys, _, _ = plan_purchases(prices, holdings, 4000, CostModel())
+    assert buys.get("A", 0) == 0  # 既に多いので買わない
+    assert buys["B"] >= 1 and buys["C"] >= 1
 
 
 def _rising_prices(n=300):

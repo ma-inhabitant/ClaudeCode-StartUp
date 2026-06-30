@@ -15,8 +15,10 @@
 
 from __future__ import annotations
 
+import csv
 from collections import defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
@@ -24,6 +26,59 @@ import pandas as pd
 from autotrade.data.base import PriceData
 from autotrade.execution.base import CostModel
 from autotrade.types import Side
+
+
+def load_holdings(path: str) -> Dict[str, float]:
+    """保有銘柄CSVを読み込む。列: symbol,shares（日本語 銘柄,株数 も可）。
+
+    取得単価など他の列があっても無視する。ファイルが無ければ空の保有として扱う。
+    """
+    holdings: Dict[str, float] = {}
+    p = Path(path)
+    if not p.exists():
+        return holdings
+    with p.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sym = (row.get("symbol") or row.get("銘柄") or row.get("ticker") or "").strip()
+            raw = (row.get("shares") or row.get("株数") or row.get("数量") or "0").strip()
+            if not sym:
+                continue
+            try:
+                shares = float(raw)
+            except ValueError:
+                continue
+            if shares != 0:
+                holdings[sym] = holdings.get(sym, 0.0) + shares
+    return holdings
+
+
+def write_plan_csv(
+    path: str,
+    buys: Dict[str, int],
+    prices_today: Dict[str, float],
+) -> None:
+    """お買い物リストをCSVに書き出す（列: symbol,shares,price,est_cost）。"""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(["symbol", "shares", "price", "est_cost"])
+        for sym in sorted(buys):
+            px = prices_today.get(sym, 0.0)
+            writer.writerow([sym, buys[sym], f"{px:.2f}", f"{buys[sym] * px:.0f}"])
+
+
+def write_holdings_csv(path: str, holdings: Dict[str, float]) -> None:
+    """保有銘柄CSVを書き出す（買い増し後の保有を次回に引き継ぐ用）。列: symbol,shares。"""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(["symbol", "shares"])
+        for sym in sorted(holdings):
+            if holdings[sym] != 0:
+                writer.writerow([sym, int(holdings[sym]) if float(holdings[sym]).is_integer() else holdings[sym]])
 
 
 def _one_share_cost(price: float, cost: CostModel) -> float:
