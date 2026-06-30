@@ -1,0 +1,58 @@
+# 米国株（US）バックテスト設定 — 実データ版（GitHub ホストの S&P500 日足）
+#
+# yfinance（Yahoo Finance）が egress 許可リストで塞がれている環境向けの実データ設定。
+# raw.githubusercontent.com から実在の S&P500 構成銘柄の日足（2013-02-08〜2018-02-07）を
+# 取得してバックテストする。初回のみダウンロード、以降は data/cache にキャッシュ。
+#
+# 実行: python -m autotrade.cli backtest --config config/us_real_sp500.yaml
+
+market: US
+
+data:
+  source: sp500_github
+  sp500_github:
+    cache_dir: data/cache
+
+# 実在の米国主要銘柄（S&P500 バンドル収録分）。
+universe:
+  - AAPL    # Apple
+  - MSFT    # Microsoft
+  - KO      # Coca-Cola
+  - PEP     # PepsiCo
+  - JNJ     # Johnson & Johnson
+  - V       # Visa
+  - PG      # Procter & Gamble
+  - WMT     # Walmart
+
+# データ収録範囲（2013-02-08〜2018-02-07）に収まる期間。
+period:
+  start: "2014-01-01"
+  end: "2017-12-31"
+
+initial_cash: 10000
+
+features:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+
+strategy:
+  name: sma_crossover
+
+risk:
+  stop_loss_pct: 0.08
+  take_profit_pct: 0.20
+  per_symbol_max_weight: 0.20
+  max_gross_exposure: 1.0
+  max_drawdown_pct: 0.20
+
+# 米国株は為替手数料を必ず含める。
+cost:
+  commission_rate: 0.003
+  min_commission: 0
+  slippage_bps: 10
+  fx_fee_rate: 0.0025
+
+fx:
+  usd_jpy: 150

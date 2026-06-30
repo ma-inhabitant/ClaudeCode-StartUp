@@ -279,7 +279,7 @@
 
 ### Phase 1 の実装状況（2026-06 時点）
 
-データ（合成/CSV/yfinance）・特徴量（SMA/RSI/ATR/長期トレンドsma_trend）・
+データ（合成/CSV/yfinance/sp500_github）・特徴量（SMA/RSI/ATR/長期トレンドsma_trend）・
 戦略（移動平均クロス / トレンドフィルター / ML=ロジスティック回帰 / 横断モメンタム
 xs_momentum、ML はランキングモードも）・リスク（損切り・**利確(任意/オフ可)**・
 **トレーリングストップ**・サイジング・最大DDブレーカー）・約定（コストモデル付き
@@ -287,6 +287,11 @@ BacktestBroker）・評価（Metrics）・**バイ&ホールド比較**・**ウ�
 **ロングショート評価（研究用 longshort）**・**防御オーバーレイ（defensive）**・
 **積立支援（plan＝お買い物リスト / accumulate＝積立シミュレーション）**・
 CLI・テスト（45件）まで実装済みで、実データ（yfinance）でエンドツーエンドに動作する。
+
+> 別データソース: Yahoo(yfinance) が egress 許可外で塞がれる環境向けに、`raw.githubusercontent.com`
+> 経由で実在の S&P500 日足（plotly/datasets, 2013–2018）を取得する `SP500GithubSource`
+> （`data.source: sp500_github`, `config/us_real_sp500.yaml`）も用意。大容量バンドルは
+> Range リクエストによる分割DL＋途中再開でキャッシュする。
 
 **検証コマンド:**
 - バックテスト＋持ち続け比較: `python -m autotrade.cli backtest --config config/jp_real.yaml`
@@ -297,6 +302,7 @@ CLI・テスト（45件）まで実装済みで、実データ（yfinance）で�
 - 防御オーバーレイ（暴落回避の検証）: `python -m autotrade.cli defensive --config config/us_xs.yaml`
 - 今月のお買い物リスト（持ち続け積立の買い指示）: `python -m autotrade.cli plan --config config/jp_xs.yaml --budget 50000`
 - 積立シミュレーション: `python -m autotrade.cli accumulate --config config/jp_xs.yaml --initial 50000 --monthly 10000`
+- S&P500実データ(GitHubホスト): `python -m autotrade.cli backtest --config config/us_real_sp500.yaml`
 
 ### ★重要な検証結果（2026-06）— まだ「持ち続け」に勝てていない
 

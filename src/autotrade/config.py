@@ -52,6 +52,11 @@ def _build_data_source(data_cfg: Dict[str, Any]) -> DataSource:
 
         opts = data_cfg.get("yfinance", {}) or {}
         return YFinanceSource(**opts)
+    if source == "sp500_github":
+        from autotrade.data.sp500_github import SP500GithubSource
+
+        opts = data_cfg.get("sp500_github", {}) or {}
+        return SP500GithubSource(**opts)
     raise ValueError(f"未知のデータソース: {source}")
 
 
