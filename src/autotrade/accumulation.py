@@ -28,29 +28,114 @@ from autotrade.execution.base import CostModel
 from autotrade.types import Side
 
 
-def load_holdings(path: str) -> Dict[str, float]:
-    """保有銘柄CSVを読み込む。列: symbol,shares（日本語 銘柄,株数 も可）。
+def load_positions(path: str) -> Dict[str, Tuple[float, Optional[float]]]:
+    """保有銘柄CSVを読み込む。列: symbol,shares[,avg_cost]（日本語 銘柄,株数,取得単価 も可）。
 
-    取得単価など他の列があっても無視する。ファイルが無ければ空の保有として扱う。
+    返り値: {銘柄: (株数, 取得単価 or None)}。取得単価の列が無ければ None（損益は出ない）。
+    ファイルが無ければ空。
     """
-    holdings: Dict[str, float] = {}
+    positions: Dict[str, Tuple[float, Optional[float]]] = {}
     p = Path(path)
     if not p.exists():
-        return holdings
+        return positions
     with p.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             sym = (row.get("symbol") or row.get("銘柄") or row.get("ticker") or "").strip()
             raw = (row.get("shares") or row.get("株数") or row.get("数量") or "0").strip()
+            cost_raw = (row.get("avg_cost") or row.get("取得単価") or row.get("cost") or "").strip()
             if not sym:
                 continue
             try:
                 shares = float(raw)
             except ValueError:
                 continue
+            avg_cost: Optional[float] = None
+            try:
+                if cost_raw:
+                    avg_cost = float(cost_raw)
+            except ValueError:
+                avg_cost = None
             if shares != 0:
-                holdings[sym] = holdings.get(sym, 0.0) + shares
-    return holdings
+                positions[sym] = (shares, avg_cost)
+    return positions
+
+
+def load_holdings(path: str) -> Dict[str, float]:
+    """保有銘柄CSVを株数の辞書として読み込む（plan 用。取得単価は無視）。"""
+    return {sym: shares for sym, (shares, _) in load_positions(path).items()}
+
+
+@dataclass
+class PositionRow:
+    symbol: str
+    shares: float
+    price: float
+    market_value: float
+    weight: float                      # ポートフォリオ内の比率（0〜1）
+    avg_cost: Optional[float] = None
+    pnl: Optional[float] = None        # 評価損益（取得単価がある場合）
+    pnl_pct: Optional[float] = None
+
+
+@dataclass
+class PortfolioStatus:
+    rows: List[PositionRow]
+    total_value: float
+    total_cost: Optional[float]
+    total_pnl: Optional[float]
+    total_pnl_pct: Optional[float]
+    n_names: int
+    currency: str = "JPY"
+
+
+def portfolio_status(
+    positions: Dict[str, Tuple[float, Optional[float]]],
+    prices_today: Dict[str, float],
+    currency: str = "JPY",
+) -> PortfolioStatus:
+    """保有と現在値から、評価額・各銘柄比率・（取得単価があれば）損益を算出する。"""
+    # 1) 各銘柄の時価を出して合計を求める。
+    valued = []
+    total_value = 0.0
+    for sym, (shares, cost) in positions.items():
+        if sym not in prices_today:
+            continue
+        px = prices_today[sym]
+        mv = shares * px
+        total_value += mv
+        valued.append((sym, shares, cost, px, mv))
+
+    # 2) 比率と損益を計算。
+    rows: List[PositionRow] = []
+    total_cost = 0.0
+    have_all_cost = len(valued) > 0
+    for sym, shares, cost, px, mv in valued:
+        weight = mv / total_value if total_value > 0 else 0.0
+        pnl = pnl_pct = None
+        if cost is not None:
+            cost_basis = shares * cost
+            total_cost += cost_basis
+            pnl = mv - cost_basis
+            pnl_pct = (pnl / cost_basis) if cost_basis > 0 else None
+        else:
+            have_all_cost = False
+        rows.append(PositionRow(sym, shares, px, mv, weight, cost, pnl, pnl_pct))
+
+    rows.sort(key=lambda r: r.market_value, reverse=True)
+    t_cost = total_cost if have_all_cost else None
+    t_pnl = (total_value - total_cost) if have_all_cost else None
+    t_pnl_pct = (t_pnl / total_cost) if (have_all_cost and total_cost > 0) else None
+
+    return PortfolioStatus(
+        rows=rows,
+        total_value=total_value,
+        total_cost=t_cost,
+        total_pnl=t_pnl,
+        total_pnl_pct=t_pnl_pct,
+        n_names=len(rows),
+        currency=currency,
+    )
 
 
 def write_plan_csv(

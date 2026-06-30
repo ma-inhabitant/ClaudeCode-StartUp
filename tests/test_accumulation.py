@@ -4,7 +4,9 @@ import pandas as pd
 
 from autotrade.accumulation import (
     load_holdings,
+    load_positions,
     plan_purchases,
+    portfolio_status,
     simulate_accumulation,
     write_holdings_csv,
     write_plan_csv,
@@ -79,6 +81,45 @@ def test_plan_with_existing_holdings_balances_toward_target():
     buys, _, _ = plan_purchases(prices, holdings, 4000, CostModel())
     assert buys.get("A", 0) == 0  # 既に多いので買わない
     assert buys["B"] >= 1 and buys["C"] >= 1
+
+
+def test_load_positions_with_and_without_cost(tmp_path):
+    path = tmp_path / "pos.csv"
+    path.write_text(
+        "symbol,shares,avg_cost\n7203.T,3,2000\n9432.T,10,\n", encoding="utf-8"
+    )
+    pos = load_positions(str(path))
+    assert pos["7203.T"] == (3.0, 2000.0)
+    assert pos["9432.T"] == (10.0, None)  # 取得単価なし
+
+
+def test_portfolio_status_values_and_weights():
+    positions = {"A": (10.0, None), "B": (5.0, None)}
+    prices = {"A": 100.0, "B": 200.0}  # A=1000, B=1000 → 各50%
+    st = portfolio_status(positions, prices, "JPY")
+    assert st.total_value == 2000.0
+    assert st.n_names == 2
+    weights = {r.symbol: round(r.weight, 3) for r in st.rows}
+    assert weights == {"A": 0.5, "B": 0.5}
+    assert st.total_cost is None  # 取得単価なし → 損益は出さない
+
+
+def test_portfolio_status_pnl_when_cost_present():
+    positions = {"A": (10.0, 100.0)}  # 取得 1000円
+    prices = {"A": 150.0}             # 時価 1500円 → +500 (+50%)
+    st = portfolio_status(positions, prices, "JPY")
+    assert st.total_cost == 1000.0
+    assert st.total_pnl == 500.0
+    assert round(st.total_pnl_pct, 3) == 0.5
+    assert st.rows[0].pnl == 500.0
+
+
+def test_portfolio_status_skips_unknown_symbols():
+    positions = {"A": (1.0, None), "ZZZ": (1.0, None)}
+    prices = {"A": 100.0}  # ZZZ は価格なし
+    st = portfolio_status(positions, prices, "JPY")
+    assert st.n_names == 1
+    assert st.total_value == 100.0
 
 
 def _rising_prices(n=300):

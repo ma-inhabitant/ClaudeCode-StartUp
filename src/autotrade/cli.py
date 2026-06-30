@@ -119,6 +119,50 @@ def cmd_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_status(args: argparse.Namespace) -> int:
+    from autotrade.accumulation import load_positions, portfolio_status
+    from autotrade.markets.calendar import get_calendar
+
+    cfg = load_config(args.config)
+    engine = build_engine(cfg)
+    prices = engine.prices
+    currency = get_calendar(cfg.get("market", "JPX")).currency
+
+    as_of = prices.dates[-1]
+    prices_today = {s: prices.price(s, as_of, "close") for s in prices.symbols if prices.has_price(s, as_of)}
+
+    positions = load_positions(args.holdings)
+    if not positions:
+        print("保有銘柄が読み込めませんでした（--holdings のCSVを確認してください）。")
+        return 1
+    unknown = sorted(set(positions) - set(prices_today))
+    if unknown:
+        print(f"⚠ 価格が取得できず評価から除外: {', '.join(unknown)}\n")
+
+    st = portfolio_status(positions, prices_today, currency)
+
+    print(f"==== ポートフォリオの現状（基準日 {as_of.date()}）====")
+    pnl_hdr = "  損益" if st.total_cost is not None else ""
+    print(f"  {'銘柄':<8} {'株数':>5} {'現在値':>10} {'評価額':>11} {'比率':>6}{pnl_hdr}")
+    print("  " + "-" * (46 + (16 if st.total_cost is not None else 0)))
+    for r in st.rows:
+        line = f"  {r.symbol:<8} {r.shares:>5.0f} {r.price:>10,.1f} {r.market_value:>11,.0f} {r.weight*100:>5.1f}%"
+        if r.pnl is not None:
+            sign = "+" if r.pnl >= 0 else ""
+            line += f"  {sign}{r.pnl:>,.0f}({sign}{r.pnl_pct*100:.1f}%)"
+        print(line)
+    print("  " + "-" * (46 + (16 if st.total_cost is not None else 0)))
+    print(f"  保有銘柄数 : {st.n_names}")
+    print(f"  評価額合計 : {st.total_value:,.0f} {currency}")
+    if st.total_cost is not None:
+        sign = "+" if st.total_pnl >= 0 else ""
+        print(f"  投資元本   : {st.total_cost:,.0f} {currency}")
+        print(f"  評価損益   : {sign}{st.total_pnl:,.0f} {currency}（{sign}{st.total_pnl_pct*100:.1f}%）")
+    else:
+        print("  （取得単価の列 avg_cost/取得単価 があれば損益も表示します）")
+    return 0
+
+
 def cmd_accumulate(args: argparse.Namespace) -> int:
     from autotrade.accumulation import simulate_accumulation
     from autotrade.execution.base import CostModel
@@ -338,6 +382,11 @@ def main(argv=None) -> int:
     pl.add_argument("--save", help="お買い物リストをCSV出力するパス（任意）")
     pl.add_argument("--out-holdings", help="買い増し後の保有をCSV出力（次回 --holdings に使える）")
     pl.set_defaults(func=cmd_plan)
+
+    stt = sub.add_parser("status", help="保有の現状（評価額・比率・損益）を表示")
+    stt.add_argument("--config", required=True, help="設定 YAML のパス（ユニバース/価格/通貨に使用）")
+    stt.add_argument("--holdings", required=True, help="保有CSV（列: symbol,shares[,avg_cost]）")
+    stt.set_defaults(func=cmd_status)
 
     ac = sub.add_parser("accumulate", help="積立シミュレーション（買い増して持ち続け）")
     ac.add_argument("--config", required=True, help="設定 YAML のパス（例: config/jp_xs.yaml）")
